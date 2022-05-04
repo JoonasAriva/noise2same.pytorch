@@ -206,6 +206,7 @@ class ResidualUnitExtraLayer(nn.Module):
             ffc: bool = False,
             global_ratio: float = 0.5,
             enable_lfu: bool = True,
+            **kwargs: Any
     ):
         super().__init__()
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
@@ -213,6 +214,7 @@ class ResidualUnitExtraLayer(nn.Module):
         stride = 2 if downsample else 1
         conv_shortcut = conv
         self.act = nn.ReLU(inplace=True)
+        self.ffc = ffc
         self.conv_shortcut = conv_shortcut(
             in_channels=in_channels,
             out_channels=out_channels,
