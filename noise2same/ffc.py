@@ -170,9 +170,9 @@ class FFC(nn.Module):
         assert stride == 1 or stride == 2, "Stride should be 1 or 2."
         self.stride = stride
 
-        in_cg = int(in_channels * ratio_gin)
+        in_cg = round(in_channels * ratio_gin)
         in_cl = in_channels - in_cg
-        out_cg = int(out_channels * ratio_gout)
+        out_cg = round(out_channels * ratio_gout)
         out_cl = out_channels - out_cg
         # groups_g = 1 if groups == 1 else int(groups * ratio_gout)
         # groups_l = 1 if groups == 1 else groups - groups_g
@@ -256,8 +256,8 @@ class FFC_BN_ACT(nn.Module):
 
         lnorm = nn.Identity if ratio_gout == 1 else norm_layer
         gnorm = nn.Identity if ratio_gout == 0 else norm_layer
-        self.bn_l = lnorm(int(out_channels * (1 - ratio_gout)))
-        self.bn_g = gnorm(int(out_channels * ratio_gout))
+        self.bn_l = lnorm(round(out_channels * (1 - ratio_gout)))
+        self.bn_g = gnorm(round(out_channels * ratio_gout))
 
         lact = nn.Identity if ratio_gout == 1 else activation_layer
         gact = nn.Identity if ratio_gout == 0 else activation_layer
@@ -273,7 +273,11 @@ class FFC_BN_ACT(nn.Module):
 
 class BN_ACT_FFC(FFC_BN_ACT):
     def forward(self, x: Union[T, Tuple[T, T]]) -> Tuple[T, T]:
-        x_l, x_g = x if type(x) is tuple else (x, 0)
+        #device = x[0].device if isinstance(x, tuple) else x.device
+        #x_l, x_g = x if type(x) is tuple else (x,0)
+        device = x[0].device if isinstance(x, tuple) else x.device
+        x_l, x_g = x if type(x) is tuple else (x, torch.tensor(0, device=device))
+
         x_l = self.act_l(self.bn_l(x_l))
         x_g = self.act_g(self.bn_g(x_g))
         x_l, x_g = self.ffc((x_l, x_g))
@@ -282,9 +286,9 @@ class BN_ACT_FFC(FFC_BN_ACT):
 
 
 def divide_channels(in_channels: int, out_channels: int, global_ratio: float):
-    in_channels_global = int(in_channels * global_ratio)
+    in_channels_global = round(in_channels * global_ratio)
     in_channels_local = in_channels - in_channels_global
-    out_channels_global = int(out_channels * global_ratio)
+    out_channels_global = round(out_channels * global_ratio)
     out_channels_local = out_channels - out_channels_global
     return (
         in_channels_local,

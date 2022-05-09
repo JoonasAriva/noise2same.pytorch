@@ -660,7 +660,7 @@ class UNet(nn.Module):
                 )
             ]
         )
-        if ffc_enc == True and ffc_dec == False:
+        if use_skip_conv:
             skip_conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         else:
             skip_conv = nn.Identity
