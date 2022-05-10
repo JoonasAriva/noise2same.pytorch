@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -93,6 +93,7 @@ class SpectralTransform(nn.Module):
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         conv = partial(conv, kernel_size=1, groups=groups, bias=False)
+
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         pool = nn.AvgPool2d if n_dim == 3 else nn.AvgPool3d
         self.downsample = (
@@ -135,6 +136,16 @@ class SpectralTransform(nn.Module):
         output = self.conv2(x + output + xs)
 
         return output
+
+
+class SpectralTransformTransposed(SpectralTransform):
+    def __init__(
+        self, in_channels: int, out_channels: int, scale_factor: int = 2, **kwargs,
+    ):
+        super(SpectralTransformTransposed, self).__init__(
+            in_channels, out_channels, **kwargs
+        )
+        self.downsample = nn.Upsample(scale_factor=scale_factor, mode="nearest")
 
 
 class FFC(nn.Module):
@@ -213,6 +224,79 @@ class FFC(nn.Module):
         return out_xl, out_xg
 
 
+class FFCTransposed(FFC):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        ratio_gin: float,
+        ratio_gout: float,
+        stride: int = 2,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = False,
+        enable_lfu: bool = True,
+        n_dim: int = 2,
+        mode="nearest",
+        **kwargs: Any,
+    ):
+        super(FFC, self).__init__()
+
+        conv = nn.ConvTranspose2d if n_dim == 2 else nn.ConvTranspose3d
+        conv = partial(
+            conv,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+        )
+
+        assert stride == 1 or stride == 2, "Stride should be 1 or 2."
+        self.stride = stride
+
+        in_cg = int(in_channels * ratio_gin)
+        in_cl = in_channels - in_cg
+        out_cg = int(out_channels * ratio_gout)
+        out_cl = out_channels - out_cg
+        # groups_g = 1 if groups == 1 else int(groups * ratio_gout)
+        # groups_l = 1 if groups == 1 else groups - groups_g
+
+        self.ratio_gin = ratio_gin
+        self.ratio_gout = ratio_gout
+
+        self.convl2l = (
+            nn.Upsample(scale_factor=stride, mode=mode)
+            if in_cl == 0 or out_cl == 0
+            else conv(in_cl, out_cl)
+        )
+        self.convl2g = (
+            nn.Upsample(scale_factor=stride, mode=mode)
+            if in_cl == 0 or out_cg == 0
+            else conv(in_cl, out_cg)
+        )
+        self.convg2l = (
+            nn.Identity(scale_factor=stride, mode=mode)
+            if in_cg == 0 or out_cl == 0
+            else conv(in_cg, out_cl)
+        )
+        self.convg2g = (
+            nn.Identity(scale_factor=stride, mode=mode)
+            if in_cg == 0 or out_cg == 0
+            else SpectralTransformTransposed(
+                in_cg,
+                out_cg,
+                stride,
+                groups=1 if groups == 1 else groups // 2,
+                enable_lfu=enable_lfu,
+                n_dim=n_dim,
+            )
+        )
+
+
 class FFC_BN_ACT(nn.Module):
     def __init__(
         self,
@@ -273,15 +357,14 @@ class FFC_BN_ACT(nn.Module):
 
 class BN_ACT_FFC(FFC_BN_ACT):
     def forward(self, x: Union[T, Tuple[T, T]]) -> Tuple[T, T]:
-        #device = x[0].device if isinstance(x, tuple) else x.device
-        #x_l, x_g = x if type(x) is tuple else (x,0)
+        # device = x[0].device if isinstance(x, tuple) else x.device
+        # x_l, x_g = x if type(x) is tuple else (x,0)
         device = x[0].device if isinstance(x, tuple) else x.device
         x_l, x_g = x if type(x) is tuple else (x, torch.tensor(0, device=device))
 
         x_l = self.act_l(self.bn_l(x_l))
         x_g = self.act_g(self.bn_g(x_g))
         x_l, x_g = self.ffc((x_l, x_g))
-        # in channeli järgi
         return x_l, x_g
 
 
