@@ -332,7 +332,7 @@ class ResidualUnitDualPass(nn.Module):
             stride=stride,
             bias=False,
         )
-        if first_block or last_block:
+        if first_block or last_block or global_ratio==0:
             self.conv_shortcut_global = nn.Identity()
         else:
             self.conv_shortcut_global = conv_shortcut(
@@ -765,7 +765,7 @@ class UNet(nn.Module):
                     if ffc_dec == False and unit_type == "dual_pass"
                     else unit_type,
                     last_block=True if i == 1 and unit_type == "dual_pass" else False,
-                    global_ratio=global_ratio,
+                    global_ratio=0 if ffc_dec==False else global_ratio,
                     enable_lfu=enable_lfu,
                 )
             )
