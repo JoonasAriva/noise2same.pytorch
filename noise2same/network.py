@@ -331,7 +331,7 @@ class ResidualUnitDualPass(nn.Module):
             padding=0,
             stride=stride,
             bias=False,
-        )
+        ) if global_ratio <1 else nn.Identity
         if first_block or last_block or global_ratio==0:
             self.conv_shortcut_global = nn.Identity()
         else:

@@ -7,7 +7,7 @@ data:
 training:
   crop: 128  # 64 in the paper
   steps: 80000
-  batch_size: 32  # 64 in the paper
+  batch_size: 64  # 64 in the paper
 
 model:
   lambda_inv: 0.95
